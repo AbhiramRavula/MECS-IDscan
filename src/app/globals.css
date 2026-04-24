@@ -1,26 +1,36 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --foreground-rgb: 0, 0, 0;
+  --background-rgb: 255, 255, 255;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-rgb));
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Fix for mobile scanner video feed */
+#reader__scan_region video {
+  border-radius: 1rem !important;
+  object-fit: cover !important;
+}
+
+/* Custom styling for the scanner's auto-generated buttons */
+#reader__dashboard_section_csr button {
+  background-color: #1e3a8a; /* This is blue-900 */
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  margin-top: 8px;
+  cursor: pointer;
+  border: none;
+}
+
+#reader__dashboard_section_csr button:hover {
+  background-color: #172554; /* darker blue */
 }
