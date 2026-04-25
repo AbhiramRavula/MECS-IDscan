@@ -5,10 +5,30 @@ import { useState, useEffect } from "react";
 import BarcodeScanner, { type ScanResult } from "@/components/BarcodeScanner";
 import RegistrationModal from "@/components/RegistrationModal";
 import { db } from "@/app/lib/firebase";
-import { doc, getDoc, addDoc, updateDoc, increment, collection, serverTimestamp, query, orderBy, limit, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, addDoc, updateDoc, increment, collection, serverTimestamp, query, orderBy, limit, onSnapshot, Timestamp } from "firebase/firestore";
 import { isLate, cn } from "@/app/lib/utils";
-import { Clock, Users, History, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Clock, Users, History, CheckCircle2, AlertTriangle, X } from "lucide-react";
 import Analytics from "@/components/Analytics";
+
+// Toast notification type
+interface Toast {
+  id: number;
+  name: string;
+  rollNo: string;
+  isLate: boolean;
+}
+
+function formatTimestamp(ts: any): string {
+  if (!ts) return "";
+  // Firestore Timestamp
+  const date = ts instanceof Timestamp ? ts.toDate() : new Date(ts.seconds * 1000);
+  return date.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+}
 
 export default function Home() {
   const [scannedRoll, setScannedRoll] = useState<string | null>(null);
@@ -17,19 +37,33 @@ export default function Home() {
   const [showRegister, setShowRegister] = useState(false);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [stats, setStats] = useState({ total: 0, late: 0 });
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
-  // Fetch recent activity and stats
+  // Fetch recent activity (last 10 scans)
   useEffect(() => {
-    const q = query(collection(db, "logs"), orderBy("timestamp", "desc"), limit(5));
+    const q = query(collection(db, "logs"), orderBy("timestamp", "desc"), limit(10));
     return onSnapshot(q, (snapshot) => {
       const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setRecentLogs(logs);
       setStats({
-        total: snapshot.size, // This is just for the last 5, you'd want a separate query for daily stats
+        total: logs.length,
         late: logs.filter((l: any) => l.isLate).length
       });
     });
   }, []);
+
+  // Auto-dismiss toasts after 2.5 seconds
+  useEffect(() => {
+    if (toasts.length === 0) return;
+    const timer = setTimeout(() => {
+      setToasts((prev) => prev.slice(1));
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [toasts]);
+
+  const showToast = (name: string, rollNo: string, late: boolean) => {
+    setToasts((prev) => [...prev, { id: Date.now(), name, rollNo, isLate: late }]);
+  };
 
   const handleScan = async (result: ScanResult) => {
     const roll = result.rollNo;
@@ -61,7 +95,9 @@ export default function Home() {
           });
         }
 
-        alert(`✅ Entry Logged: ${data.name} (${late ? "LATE" : "ON-TIME"})`);
+        // Show non-blocking toast and immediately reset for next scan
+        showToast(data.name, roll, late);
+        if (navigator.vibrate) navigator.vibrate(late ? [200, 100, 200] : [100]);
         resetScanner();
       } else {
         // Unknown Roll Number -> Trigger Registration
@@ -69,7 +105,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error("Scan Error:", error);
-      alert("Error processing scan.");
+      showToast("ERROR", roll, true);
       resetScanner();
     }
   };
@@ -82,7 +118,33 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 flex flex-col pb-20 font-sans text-black">
+    <main className="min-h-screen bg-gray-50 flex flex-col pb-20 font-sans text-black relative">
+      {/* Toast Notifications — auto-dismiss, non-blocking */}
+      <div className="fixed top-4 left-4 right-4 z-[100] space-y-2 pointer-events-none">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={cn(
+              "p-4 rounded-2xl shadow-xl border-2 flex items-center justify-between pointer-events-auto animate-in slide-in-from-top duration-300",
+              toast.isLate
+                ? "bg-red-50 border-red-500 text-red-900"
+                : "bg-green-50 border-green-500 text-green-900"
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <CheckCircle2 size={24} />
+              <div>
+                <p className="font-black text-sm">{toast.name}</p>
+                <p className="text-[10px] font-bold opacity-70">{toast.rollNo}</p>
+              </div>
+            </div>
+            <span className="text-xs font-black uppercase px-2 py-1 rounded-full bg-white">
+              {toast.isLate ? "LATE" : "ON-TIME"}
+            </span>
+          </div>
+        ))}
+      </div>
+
       {/* Header */}
       <header className="bg-blue-900 text-white p-6 shadow-lg">
         <h1 className="text-3xl font-black tracking-tighter">MECS SCANNER</h1>
@@ -122,10 +184,17 @@ export default function Home() {
             <div key={log.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center">
               <div>
                 <p className="font-black text-blue-900">{log.name || log.studentId}</p>
-                <p className="text-xs font-bold text-gray-500">{log.dept} • {log.year}</p>
+                <p className="text-[11px] font-bold font-mono text-gray-500">{log.studentId}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-[10px] font-bold text-gray-400">{log.dept} • {log.year}</p>
+                  <span className="text-[10px] font-bold text-gray-400">•</span>
+                  <p className="text-[10px] font-black text-blue-600">
+                    {formatTimestamp(log.timestamp)}
+                  </p>
+                </div>
               </div>
               <div className={cn(
-                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
+                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0",
                 log.isLate ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
               )}>
                 {log.isLate ? "LATE" : "ON-TIME"}
