@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import BarcodeScanner, { type ScanResult } from "@/components/BarcodeScanner";
 import RegistrationModal from "@/components/RegistrationModal";
 import { db } from "@/app/lib/firebase";
-import { doc, getDoc, addDoc, updateDoc, increment, collection, serverTimestamp, query, orderBy, limit, onSnapshot, Timestamp } from "firebase/firestore";
+import { doc, getDoc, addDoc, updateDoc, increment, collection, serverTimestamp, query, orderBy, limit, onSnapshot, Timestamp, where } from "firebase/firestore";
 import { isLate, cn } from "@/app/lib/utils";
 import { Clock, Users, History, CheckCircle2, AlertTriangle, X } from "lucide-react";
 import Analytics from "@/components/Analytics";
@@ -20,7 +20,6 @@ interface Toast {
 
 function formatTimestamp(ts: any): string {
   if (!ts) return "";
-  // Firestore Timestamp
   const date = ts instanceof Timestamp ? ts.toDate() : new Date(ts.seconds * 1000);
   return date.toLocaleTimeString("en-IN", {
     hour: "2-digit",
@@ -28,6 +27,12 @@ function formatTimestamp(ts: any): string {
     second: "2-digit",
     hour12: true,
   });
+}
+
+function getStartOfToday(): Date {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return now;
 }
 
 export default function Home() {
@@ -39,9 +44,15 @@ export default function Home() {
   const [stats, setStats] = useState({ total: 0, late: 0 });
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  // Fetch recent activity (last 10 scans)
+  // Fetch today's logs only
   useEffect(() => {
-    const q = query(collection(db, "logs"), orderBy("timestamp", "desc"), limit(10));
+    const todayStart = Timestamp.fromDate(getStartOfToday());
+    const q = query(
+      collection(db, "logs"),
+      where("timestamp", ">=", todayStart),
+      orderBy("timestamp", "desc"),
+      limit(50)
+    );
     return onSnapshot(q, (snapshot) => {
       const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setRecentLogs(logs);

@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { db } from "@/app/lib/firebase";
-import { collection, query, onSnapshot, Timestamp } from "firebase/firestore";
+import { collection, query, onSnapshot, Timestamp, where, orderBy } from "firebase/firestore";
 import { BarChart3, Download, Filter, FileSpreadsheet } from "lucide-react";
 import * as XLSX from "xlsx";
 
@@ -45,7 +45,12 @@ export default function Analytics() {
   const [availableBranches, setAvailableBranches] = useState<string[]>([]);
 
   useEffect(() => {
-    const q = query(collection(db, "logs"));
+    const todayStart = Timestamp.fromDate(getStartOfToday());
+    const q = query(
+      collection(db, "logs"),
+      where("timestamp", ">=", todayStart),
+      orderBy("timestamp", "desc")
+    );
     return onSnapshot(q, (snapshot) => {
       const allLogs = snapshot.docs.map((doc) => doc.data() as LogEntry);
       setLogs(allLogs);
